@@ -1,14 +1,511 @@
+
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ASHA VoiceCare · Gnani PS1</title><link rel="stylesheet" href="style.css"></head>
-<body><header><div class="brand">✚ ASHA <span>VoiceCare</span></div><p>Gnani Voice Hackathon · PS1 Healthcare · Voice Field Register</p></header><main>
-<section class="hero"><div><p class="eyebrow">VOICE-FIRST · NO TYPING</p><h1>Speak the visit. Confirm it. Follow up.</h1><p>Live streaming speech recognition with Gnani Prisma, structured visit extraction, spoken read-back and rule-list referral alerts.</p></div><div class="status" id="apiStatus">Checking API…</div></section>
-<section class="panel"><div class="section-title"><div><p class="eyebrow">STEP 1</p><h2>Capture the visit live</h2></div><span class="tag">Gnani Prisma v3 streaming</span></div>
-<label for="language">Voice language (stream language hint)</label><select id="language"><option value="indic-auto" selected>Auto detect Indic / code-mix</option><option value="kn-IN">Kannada</option><option value="hi-IN">Hindi</option><option value="en-IN">English (India)</option><option value="ta-IN">Tamil</option><option value="te-IN">Telugu</option><option value="ml-IN">Malayalam</option><option value="mr-IN">Marathi</option><option value="bn-IN">Bengali</option><option value="gu-IN">Gujarati</option><option value="pa-IN">Punjabi</option></select>
-<label for="ttsVoice">Timbre voice</label><select id="ttsVoice"><option value="Kaveri">Kaveri</option><option value="Shubhra">Shubhra</option><option value="Nalini">Nalini (Timbre v2.5 option)</option><option value="Pranav">Pranav</option><option value="Deepak">Deepak</option></select>
-<div class="voice-controls"><button id="startBtn" class="primary">🎙 Start live stream</button><button id="stopBtn" class="secondary" disabled>Stop & finish</button><span id="micStatus" aria-live="polite">Not listening</span></div>
-<label for="note">Live transcript</label><textarea id="note" rows="6" placeholder="The live transcript appears here. Speak Kannada / Hindi / another supported Indic language with English health terms." readonly></textarea><p class="hint">Audio is captured mono, noise suppression and echo cancellation requested, converted to 16 kHz PCM and streamed over WebSocket to Gnani Prisma. Review names, IDs, dates, quantities and clinical terms.</p><button id="extractBtn" class="primary">Extract / read back</button></section>
-<section class="panel"><div class="section-title"><div><p class="eyebrow">STEP 2</p><h2>Read-back and corrections</h2></div><span class="tag">Voice confirmation required</span></div><div id="dangerBox" class="danger hidden" role="alert"></div>
-<div class="fields"><label>Beneficiary ID<input id="beneficiary_id" placeholder="Required · synthetic ID" readonly></label><label>Visit type<select id="visit_type" disabled><option value="">Not identified</option><option>ANC</option><option>PNC</option><option>Newborn</option><option>Immunisation</option></select></label><label>Weight (kg)<input id="weight_kg" type="number" step="0.1" min="0" placeholder="Not captured" readonly></label><label>Vaccination status<input id="vaccination_status" placeholder="Not specified" readonly></label><label>Vaccinations / items due<input id="vaccinations_due" placeholder="TT / IFA / vaccine" readonly></label><label>Next visit date<input id="next_visit_date" type="date" readonly></label></div>
-<div class="voice-controls"><button id="readBtn" class="secondary">🔊 Read fields aloud</button><button id="correctionBtn" class="secondary">🎙 Correct by voice</button></div><p class="hint">Say e.g. “No, weight 2.8 kilo”, “beneficiary ID SYN-1003”, or “yes, save”. Read-back must be checked before the record is stored.</p><label class="check"><input type="checkbox" id="confirmed"> I listened and confirm the record</label><button id="saveBtn" class="primary" disabled>Save confirmed visit</button><p id="saveStatus" aria-live="polite"></p></section>
-<section class="panel"><div class="section-title"><div><p class="eyebrow">STEP 3</p><h2>Follow-up register</h2></div><button id="refreshBtn" class="small">Refresh</button></div><div id="followups" class="empty">Loading follow-ups…</div></section>
-</main><footer>Demo only · Synthetic beneficiaries only · No diagnosis or treatment advice · Danger signs follow configured phrase list</footer><script src="app.js"></script></body></html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>ASHA VoiceCare · Gnani PS1</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header>
+    <div class="brand">✚ ASHA <span>VoiceCare</span></div>
+    <p>Gnani Voice Hackathon · PS1 Healthcare</p>
+</header>
+
+<main>
+
+    <!-- WORKER LOGIN -->
+    <section class="panel" id="authPanel">
+
+        <p class="eyebrow">SECURE WORKER ACCESS</p>
+        <h2>ASHA Worker Login</h2>
+
+        <form id="loginForm">
+
+            <label for="username">Username</label>
+
+            <input
+                id="username"
+                name="username"
+                type="text"
+                required
+                autocomplete="username"
+            >
+
+            <label for="password">Password</label>
+
+            <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                autocomplete="current-password"
+            >
+
+            <button type="submit" class="primary">
+                Login
+            </button>
+
+        </form>
+
+        <p id="loginStatus" aria-live="polite"></p>
+
+    </section>
+
+
+    <!-- AUTHENTICATED APPLICATION -->
+    <div id="appContent" hidden>
+
+        <!-- WORKER SESSION -->
+        <section class="panel">
+
+            <div class="section-title">
+
+                <div>
+                    <p class="eyebrow">WORKER SESSION</p>
+                    <h2>Welcome to ASHA VoiceCare</h2>
+                </div>
+
+                <button id="logoutBtn" class="secondary">
+                    Logout
+                </button>
+
+            </div>
+
+            <p id="workerInfo">Worker account</p>
+
+        </section>
+
+
+        <!-- PATIENT REGISTRATION -->
+        <section class="panel">
+
+            <p class="eyebrow">PATIENT MANAGEMENT</p>
+            <h2>Register New Patient</h2>
+
+            <form id="patientForm">
+
+                <label for="patientName">
+                    Patient name
+                </label>
+
+                <input
+                    id="patientName"
+                    type="text"
+                    required
+                    minlength="2"
+                    maxlength="100"
+                >
+
+                <label for="patientAge">
+                    Age
+                </label>
+
+                <input
+                    id="patientAge"
+                    type="number"
+                    min="0"
+                    max="120"
+                    required
+                >
+
+                <label for="patientPhone">
+                    Contact number (optional)
+                </label>
+
+                <input
+                    id="patientPhone"
+                    type="tel"
+                    maxlength="15"
+                >
+
+                <button type="submit" class="primary">
+                    Register Patient
+                </button>
+
+            </form>
+
+            <p id="registrationStatus" aria-live="polite"></p>
+
+        </section>
+
+
+        <!-- PATIENT IDENTIFICATION -->
+        <section class="panel">
+
+            <p class="eyebrow">PATIENT IDENTIFICATION</p>
+            <h2>Find Patient</h2>
+
+            <label for="patientSearchId">
+                Enter Project Patient ID
+            </label>
+
+            <input
+                id="patientSearchId"
+                type="text"
+                placeholder="Example: ASHA-A1B2C3"
+            >
+
+            <button id="manualSearchBtn" class="primary">
+                Search Patient
+            </button>
+
+            <hr>
+
+            <h3>Scan Project ID Card</h3>
+
+            <!-- QR scanner library uses a DIV container -->
+            <div
+                id="qrVideo"
+                style="width:100%; max-width:450px;"
+                hidden
+            ></div>
+
+            <button id="startScanBtn" class="secondary">
+                Start QR Scanner
+            </button>
+
+            <button
+                id="stopScanBtn"
+                class="secondary"
+                disabled
+            >
+                Stop Scanner
+            </button>
+
+            <p id="scanStatus" aria-live="polite">
+                Scanner not started.
+            </p>
+
+            <p id="lookupStatus" aria-live="polite"></p>
+
+        </section>
+
+
+        <!-- PATIENT PROFILE -->
+        <section class="panel" id="patientProfile" hidden>
+
+            <p class="eyebrow">PATIENT PROFILE</p>
+            <h2>Patient Details</h2>
+
+            <p>
+                Patient ID:
+                <strong id="profilePatientId"></strong>
+            </p>
+
+            <p>
+                Name:
+                <strong id="profilePatientName"></strong>
+            </p>
+
+            <p>
+                Age:
+                <strong id="profilePatientAge"></strong>
+            </p>
+
+            <p>
+                Contact:
+                <strong id="profilePatientPhone"></strong>
+            </p>
+
+            <button id="generateCardBtn" class="primary">
+                Generate Project ID Card
+            </button>
+
+            <!-- GENERATED ID CARD -->
+            <div id="idCard" hidden>
+
+                <hr>
+
+                <h3>ASHA VoiceCare</h3>
+
+                <p>PROJECT PATIENT ID CARD</p>
+
+                <p id="cardPatientName"></p>
+
+                <p id="cardPatientId"></p>
+
+                <div id="cardQr"></div>
+
+                <p>For project demonstration only</p>
+
+                <button id="printCardBtn" class="secondary">
+                    Print ID Card
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <!-- ORIGINAL VOICECARE DASHBOARD -->
+        <section class="hero">
+
+            <div>
+
+                <p class="eyebrow">
+                    VOICE-FIRST · NO TYPING
+                </p>
+
+                <h1>
+                    Speak the visit. Confirm it. Follow up.
+                </h1>
+
+                <p>
+                    Live streaming speech recognition with Gnani Prisma,
+                    structured visit extraction and spoken read-back.
+                </p>
+
+            </div>
+
+            <div class="status" id="apiStatus">
+                Checking API…
+            </div>
+
+        </section>
+
+
+        <!-- STEP 1: VOICE CAPTURE -->
+        <section class="panel">
+
+            <div class="section-title">
+
+                <div>
+                    <p class="eyebrow">STEP 1</p>
+                    <h2>Capture the visit live</h2>
+                </div>
+
+                <span class="tag">
+                    Gnani Prisma v3 streaming
+                </span>
+
+            </div>
+
+            <label for="language">
+                Voice language
+            </label>
+
+            <select id="language">
+
+                <option value="indic-auto">
+                    Auto detect Indic / code-mix
+                </option>
+
+                <option value="kn-IN">Kannada</option>
+                <option value="hi-IN">Hindi</option>
+                <option value="en-IN">English</option>
+                <option value="ta-IN">Tamil</option>
+                <option value="te-IN">Telugu</option>
+                <option value="ml-IN">Malayalam</option>
+
+            </select>
+
+
+            <label for="ttsVoice">
+                Timbre voice
+            </label>
+
+            <select id="ttsVoice">
+
+                <option value="Kaveri">Kaveri</option>
+                <option value="Shubhra">Shubhra</option>
+                <option value="Nalini">Nalini</option>
+                <option value="Pranav">Pranav</option>
+                <option value="Deepak">Deepak</option>
+
+            </select>
+
+
+            <div class="voice-controls">
+
+                <button id="startBtn" class="primary">
+                    🎙 Start live stream
+                </button>
+
+                <button
+                    id="stopBtn"
+                    class="secondary"
+                    disabled
+                >
+                    Stop & finish
+                </button>
+
+                <span id="micStatus">
+                    Not listening
+                </span>
+
+            </div>
+
+
+            <label for="note">
+                Live transcript
+            </label>
+
+            <textarea
+                id="note"
+                rows="6"
+                readonly
+                placeholder="Live transcript appears here."
+            ></textarea>
+
+            <button id="extractBtn" class="primary">
+                Extract / read back
+            </button>
+
+        </section>
+
+
+        <!-- STEP 2: READ BACK -->
+        <section class="panel">
+
+            <div class="section-title">
+
+                <div>
+                    <p class="eyebrow">STEP 2</p>
+                    <h2>Read-back and corrections</h2>
+                </div>
+
+            </div>
+
+            <div id="dangerBox" class="danger hidden"></div>
+
+            <div class="fields">
+
+                <label>
+                    Beneficiary ID
+                    <input id="beneficiary_id" readonly>
+                </label>
+
+                <label>
+                    Visit type
+
+                    <select id="visit_type" disabled>
+
+                        <option value="">
+                            Not identified
+                        </option>
+
+                        <option>ANC</option>
+                        <option>PNC</option>
+                        <option>Newborn</option>
+                        <option>Immunisation</option>
+
+                    </select>
+
+                </label>
+
+                <label>
+                    Weight (kg)
+                    <input id="weight_kg" type="number" readonly>
+                </label>
+
+                <label>
+                    Vaccination status
+                    <input id="vaccination_status" readonly>
+                </label>
+
+                <label>
+                    Vaccinations / items due
+                    <input id="vaccinations_due" readonly>
+                </label>
+
+                <label>
+                    Next visit date
+                    <input
+                        id="next_visit_date"
+                        type="date"
+                        readonly
+                    >
+                </label>
+
+            </div>
+
+
+            <div class="voice-controls">
+
+                <button id="readBtn" class="secondary">
+                    🔊 Read fields aloud
+                </button>
+
+                <button id="correctionBtn" class="secondary">
+                    🎙 Correct by voice
+                </button>
+
+            </div>
+
+
+            <label class="check">
+
+                <input type="checkbox" id="confirmed">
+
+                I listened and confirm the record
+
+            </label>
+
+
+            <button
+                id="saveBtn"
+                class="primary"
+                disabled
+            >
+                Save confirmed visit
+            </button>
+
+            <p id="saveStatus"></p>
+
+        </section>
+
+
+        <!-- STEP 3: FOLLOW-UP REGISTER -->
+        <section class="panel">
+
+            <div class="section-title">
+
+                <div>
+                    <p class="eyebrow">STEP 3</p>
+                    <h2>Follow-up register</h2>
+                </div>
+
+                <button id="refreshBtn" class="small">
+                    Refresh
+                </button>
+
+            </div>
+
+            <div id="followups" class="empty">
+                Loading follow-ups…
+            </div>
+
+        </section>
+
+    </div>
+
+</main>
+
+
+<footer>
+    Demo only · Synthetic beneficiaries only ·
+    No diagnosis or treatment advice
+</footer>
+
+
+<!-- QR CODE GENERATOR -->
+<script src="https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+<!-- QR CAMERA SCANNER -->
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<!-- EXISTING VOICECARE JAVASCRIPT -->
+<script src="app.js"></script>
+
+<!-- AUTHENTICATION AND PATIENT JAVASCRIPT -->
+<script src="auth-patients.js"></script>
+
+</body>
+</html>

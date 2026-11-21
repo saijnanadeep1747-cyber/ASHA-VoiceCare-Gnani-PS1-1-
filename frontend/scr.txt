@@ -1,0 +1,19 @@
+ASHA_VoiceCare_Gnani_PS1/
+│
+├── backend/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── auth.py
+│   └── create_worker.py
+│
+├── frontend/
+│   ├── index.html
+│   ├── style.css
+│   ├── app.js
+│   └── auth-patients.js       <-- add this file
+│
+├── data/
+│   └── danger_signs.json
+│
+├── asha_voicecare.db
+└── .env
